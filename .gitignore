@@ -2,3 +2,6 @@
 data/*
 data/*/
 !data/.placeholder
+__pycache__/
+experiments/
+checkpoints/
