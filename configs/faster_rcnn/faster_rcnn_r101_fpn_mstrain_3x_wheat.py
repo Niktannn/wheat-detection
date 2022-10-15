@@ -1,5 +1,8 @@
 _base_ = './faster_rcnn_r50_fpn_mstrain_3x_wheat.py'
 
+data = dict(
+    samples_per_gpu=12)
+
 model = dict(
     backbone=dict(
         depth=101,

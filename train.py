@@ -1,7 +1,9 @@
 import argparse
-import os.path as osp
 import numpy as np
 import mmcv
+import random
+import os
+import torch
 
 import wheat_dataset
 
@@ -9,7 +11,16 @@ from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 from mmdet.apis import train_detector, set_random_seed
 
-def train(config, resume_from=None, max_epochs=None, work_dir=None, seed=0):
+def train(config, resume_from=None, max_epochs=None, work_dir=None, seed=0,
+          dataset=None):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
     #load config
     if isinstance(config, str):
         config = mmcv.Config.fromfile(config)
@@ -31,7 +42,10 @@ def train(config, resume_from=None, max_epochs=None, work_dir=None, seed=0):
     set_random_seed(seed, deterministic=True)
 
     # Build dataset
-    datasets = [build_dataset(config.data.train)]
+    if dataset:
+        datasets = [dataset]
+    else:
+        datasets = [build_dataset(config.data.train)]
 
     # Build the detector
     model = build_detector(config.model)
@@ -39,7 +53,7 @@ def train(config, resume_from=None, max_epochs=None, work_dir=None, seed=0):
     model.CLASSES = datasets[0].CLASSES
     
     # Create work_dir
-    mmcv.mkdir_or_exist(osp.abspath(config.work_dir))
+    mmcv.mkdir_or_exist(os.path.abspath(config.work_dir))
 
     train_detector(model, datasets, config, distributed=False, validate=True)
 

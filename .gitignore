@@ -4,4 +4,10 @@ data/*/
 !data/.placeholder
 __pycache__/
 experiments/
-checkpoints/
+test.py
+.idea/
+model_search/
+model_search_full.py
+checkpoints/*
+checkpoints/*/
+!checkpoints/.placeholder

@@ -8,9 +8,10 @@ import numpy as np
 class WheatDataset(CustomDataset):
     CLASSES = ('Head',)
     def load_annotations(self, ann_file):
+        print(f'loading annotations for WheatDataset from {ann_file}...')
         cat2label = {k: i for i, k in enumerate(self.CLASSES)}
         # load image list from file
-        image_list = mmcv.list_from_file(self.ann_file)
+        image_list = mmcv.list_from_file(ann_file)
     
         data_infos = []
 

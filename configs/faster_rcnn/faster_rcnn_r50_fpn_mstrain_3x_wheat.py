@@ -6,6 +6,7 @@ dataset_type = 'WheatDataset'
 data_root = 'data/'
 
 data = dict(
+    samples_per_gpu=20,
     train=dict(
         dataset = dict(
             type = dataset_type,
@@ -42,10 +43,10 @@ optimizer = dict(
 )
 
 lr_config = dict(
-    warmup_iters = 500 * 8
+    warmup_iters = 500
 )
 
-log_config = dict(interval=2)
+runner = dict(type='EpochBasedRunner', max_epochs=3)
 
 evaluation = dict(
     metric = 'mAP',
@@ -55,8 +56,10 @@ checkpoint_config = dict(interval=2)
 device = 'cuda'
 gpu_ids = range(1)
 
-log_config = dict(hooks = [
-    dict(type='TextLoggerHook'),
-    dict(type='TensorboardLoggerHook')])
+log_config = dict(
+    interval=100,
+    hooks = [
+        dict(type='TextLoggerHook'),
+        dict(type='TensorboardLoggerHook')])
 
 seed = 0
