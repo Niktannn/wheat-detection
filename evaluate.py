@@ -14,11 +14,12 @@ from mmdet.utils import (build_dp, compat_cfg,
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint)
 
 import wheat_dataset
+from utils.split_data import write_ann_file
 
 
-def evaluate(config, ckpt, on_train=False,
+def evaluate(config, ckpt,
              show=False, show_dir=None, show_score_thr=0.3,
-             eval_metrics='mAP',
+             eval_metrics=('mAP',),
              out=None
              ):
     if isinstance(config, (str)):
@@ -27,7 +28,15 @@ def evaluate(config, ckpt, on_train=False,
         raise TypeError('config must be a filename or Config object, '
                         f'but got {type(config)}')
 
-    dataset = build_dataset(config.data.train if on_train else config.data.val)
+    all_imgs_ids = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir('data/train')]
+    all_ids_file = 'data/all.txt'
+    write_ann_file(all_ids_file, all_imgs_ids)
+
+    config.data.test.ann_file = all_ids_file
+    config.data.test.img_prefix = 'data/train'
+
+    dataset = build_dataset(config.data.test)
+
     data_loader = build_dataloader(dataset,
                                    samples_per_gpu=config.data.samples_per_gpu,
                                    workers_per_gpu=2,
@@ -66,13 +75,14 @@ def evaluate(config, ckpt, on_train=False,
         eval_kwargs.pop(key, None)
     eval_kwargs.update(dict(metric=eval_metrics))
     metric = dataset.evaluate(results, **eval_kwargs)
-    print(metric)
     if out:
-        metric_dict = dict(config=cfg.dump(), metric=metric)
+        metric_dict = dict(config=config.dump(), metric=metric)
         mmcv.mkdir_or_exist(os.path.abspath(out))
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
         json_file = os.path.join(out, f'eval_{timestamp}.json')
         mmcv.dump(metric_dict, json_file)
+
+    os.remove(all_ids_file)
 
     return metric
 
@@ -83,8 +93,6 @@ if __name__ == '__main__':
                         help='path to mmdetection model config')
     parser.add_argument('--ckpt', type=str, default=None,
                         help='path to load weights from')
-    parser.add_argument('--on_train', action='store_true',
-                        help='whether to evaluate on train set(val is used by default)')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--show-dir',
                         help='directory where painted images will be saved')
@@ -94,7 +102,8 @@ if __name__ == '__main__':
                         help='path to directory where results will be saved')
 
     opt = parser.parse_args()
-    evaluate(opt.config, opt.ckpt, opt.on_train,
+    evaluate(opt.config, opt.ckpt,
              opt.show, opt.show_dir, opt.show_score_thr,
-             opt.out
+             eval_metrics=('mAP',),
+             out=opt.out
              )

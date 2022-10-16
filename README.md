@@ -28,7 +28,7 @@ Download training logs from [google drive](https://drive.google.com/file/d/1_0B-
 
 ## Usage
 ### Training
-run [train.py](./train.py) with arguments:
+To train model run [train.py](./train.py) with arguments:
 - `--config=<path to config>` - path to model config
 - `--resume_from=<path to checkpoint>` - path to load weights from to resume training (optional)
 - `--max_epochs=<number>`       - number of epochs to train (default value is obtained from model config)
@@ -39,7 +39,7 @@ python train.py --config=<path to config> [--resume_from=<path to checkpoint>] \
 ```
 
 ### Testing
-run [test.py](./test.py) with arguments:
+To test model run [test.py](./test.py) with arguments:
 - `--config=<path to config>` - path to model config
 - `--ckpt=<path to checkpoint>` - path to load weights from
 - `--imgs_path=<path to dir>` - path to images to test (images from model test data config are tested by default)
@@ -55,10 +55,9 @@ python train.py --config=<path to config> --ckpt=<path to checkpoint> \
 ```
 
 ### Evaluating
-run [evaluate.py](./evaluate.py) with arguments:
+To evaluate model on entire training data run [evaluate.py](./evaluate.py) with arguments:
 - `--config=<path to config>` - path to model config
 - `--ckpt=<path to checkpoint>` - path to load weights from
-- `--on_train` -whether to evaluate on train set(val is used by default)
 - `--show` - whether to show results
 - `--show-dir=<path to dir>` - directory where painted images will be saved (will be created)
 - `--show-score-thr=<threshold value>` - score threshold to show bounding box (default: 0.3)
