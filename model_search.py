@@ -9,9 +9,16 @@ from train import train
 from evaluate import evaluate
 from tqdm.notebook import tqdm
 import json
+import shutil
 from mmdet.datasets import build_dataset
 
-seed = 0
+from utils.split_data import write_ann_file
+import csv
+from enum import Enum
+
+class Mode(Enum):
+  RCNN = 'faster_rcnn'
+  YOLO = 'yolox'
 
 #######################################################################
 ####################### MODEL SEARCH PARAMETERS #######################
@@ -86,13 +93,15 @@ frcnn_grid = [
 
 yolo_grid = [{ 'backbone'   : ['yolox-tiny', 'yolox-small'] }]
 
+n_splits = 3
 
-
-def write_ann_file(file, ids):
-    with open(file, 'w') as f:
-        for id in ids:
-            f.write(f"{id}\n")
-
+faster_rcnn_configs = [
+    'configs/faster_rcnn/faster_rcnn_r50_fpn_mstrain_3x_wheat.py',
+    'configs/faster_rcnn/faster_rcnn_r101_fpn_mstrain_3x_wheat.py']
+yolox_configs = [
+    'configs/yolox/yolox_tiny_8x8_300e_wheat.py',
+    'configs/yolox/yolox_s_8x8_300e_wheat.py'
+]
 
 def draw_table(data, title=['mAP'], width=[100, 6]):
     row_format = '|' + '|'.join([("{:>" + str(w) + "}") for w in width]) + '|'
@@ -108,7 +117,7 @@ def draw_table(data, title=['mAP'], width=[100, 6]):
             row_name = '...' + key[len(key) - width[0] + 3:]
         else:
             row_name = key
-        print(row_format.format(row_name, *[round(x, 2) for x in data[key]]))
+        print(row_format.format(row_name, *[round(x, 3) for x in data[key]]))
         print(row_format_bet.format(
             "-" * width[0], *["-" * width[i + 1] for i, _ in enumerate(title)]))
 
@@ -133,14 +142,14 @@ def write_annotations_kfold(skf, base_dir, img_ids, regions, cfg):
 
 
 def faster_rcnn_model_search(seed=0, max_epochs=3, train_size=None):
-    model_search(seed, max_epochs, train_size, mode='rcnn')
+    model_search(seed, max_epochs, train_size, mode=Mode.RCNN)
 
 
 def yolo_model_search(seed=0, max_epochs=50, train_size=None):
-    model_search(seed, max_epochs, train_size, mode='yolo')
+    model_search(seed, max_epochs, train_size, mode=Mode.YOLO)
 
 
-def model_search(seed=0, max_epochs=3, train_size=None, mode='rcnn'):
+def model_search(seed=0, max_epochs=3, train_size=None, mode=Mode.RCNN):
     train_data = pd.read_csv('data/annotations.csv')
 
     train_data['source'] = pd.factorize(train_data['source'])[0]
@@ -164,24 +173,23 @@ def model_search(seed=0, max_epochs=3, train_size=None, mode='rcnn'):
         regions = regions[:partial_size]
 
     param_grid = ParameterGrid({})
-    if mode == 'rcnn':
+    if mode == Mode.RCNN:
         param_grid = ParameterGrid(frcnn_grid)
-    elif mode == 'yolo':
+    elif mode == Mode.YOLO:
         param_grid = ParameterGrid(yolo_grid)
     scores = {}
     best_score = 0.
 
-    n_splits = 3
     skf = StratifiedKFold(n_splits=n_splits, random_state=seed, shuffle=True)
 
-    base_dir = os.path.join('model_search', 'faster_rcnn' if mode == 'rcnn' else 'yolox')
+    base_dir = os.path.join('model_search', 'faster_rcnn' if mode == Mode.RCNN else 'yolox')
     mmcv.mkdir_or_exist(base_dir)
 
     test_ids = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir('data/test')]
     test_ann_file = os.path.join(base_dir, f'test.txt')
     write_ann_file(test_ann_file, test_ids)
 
-    if mode == 'rcnn':
+    if mode == Mode.RCNN:
         fold_datasets = write_annotations_kfold(skf, base_dir, img_ids, regions,
                                                 mmcv.Config.fromfile('configs/' + backbones_by_name['ResNet50']))
 
@@ -189,14 +197,14 @@ def model_search(seed=0, max_epochs=3, train_size=None, mode='rcnn'):
         print(f'evaluating parameters:\n{params}')
         sum_map = 0.
 
-        if mode == 'yolo':
+        if mode == Mode.YOLO:
             fold_datasets = write_annotations_kfold(skf, base_dir, img_ids, regions,  mmcv.Config.fromfile(
                 'configs/' + backbones_by_name[params['backbone']]))
 
         for fold_num in range(n_splits):
             cfg = mmcv.Config.fromfile('configs/' + backbones_by_name[params['backbone']])
 
-            if mode == 'rcnn':
+            if mode == Mode.RCNN:
                 cfg.merge_from_dict({**bbox_losses_by_name[params['loss_bbox']],
                                      **optimizers_by_name[params['optimizer']],
                                      **schedulers_by_name[params['scheduler']]
@@ -242,3 +250,107 @@ def model_search(seed=0, max_epochs=3, train_size=None, mode='rcnn'):
         print('====================================')
 
     draw_table(scores)
+
+
+def get_models_info(mode):
+    if mode == Mode.RCNN:
+        param_grid = ParameterGrid(frcnn_grid)
+    elif mode == Mode.YOLO:
+        param_grid = ParameterGrid(yolo_grid)
+    else:
+        raise ValueError("unknown mode, shoud be 'rcnn' or 'yolo'")
+
+    scores = {}
+    checkpoints = {}
+
+    for params in param_grid:
+        base_dir = os.path.join('model_search',
+                                'faster_rcnn' if mode == Mode.RCNN else 'yolox',
+                                '_'.join([str(p) for p in params.values()])
+                                )
+        fold_scores = np.zeros(n_splits, dtype=np.float)
+
+        for fold_num in range(n_splits):
+            work_dir = os.path.join(base_dir, 'fold_' + str(fold_num))
+            with open(os.path.join(work_dir, "None.log.json"), 'r') as json_file:
+                fold_scores[fold_num] = max([json.loads(line)['mAP']
+                                             for line in json_file
+                                             if 'mode' in json.loads(line) and
+                                             json.loads(line)['mode'] == 'val'])
+        best_fold = np.argmax(fold_scores)
+        checkpoint = os.path.join(base_dir, 'fold_' + str(best_fold), 'latest.pth')
+
+        score = np.mean(fold_scores)
+        if mode == Mode.RCNN:
+            name = f"Faster-RCNN {params['loss_bbox']}"
+        else:
+            name = 'YOLOX'
+        scores.setdefault(name, [])
+        scores[name].append(score)
+
+        checkpoints.setdefault(name, [])
+        checkpoints[name].append(checkpoint)
+
+    return scores, checkpoints
+
+def aggregate_results(file='models_info.csv'):
+    lines = []
+    scores_table = {}
+
+    for mode in [Mode.RCNN, Mode.YOLO]:
+        if mode == Mode.RCNN:
+            param_grid = ParameterGrid(frcnn_grid)
+        else:
+            param_grid = ParameterGrid(yolo_grid)
+
+        for params in param_grid:
+            base_dir = os.path.join('model_search',
+                                    'faster_rcnn' if mode == Mode.RCNN else 'yolox',
+                                    '_'.join([str(p) for p in params.values()])
+                                    )
+            fold_scores = np.zeros(n_splits, dtype=np.float)
+
+            for fold_num in range(n_splits):
+                work_dir = os.path.join(base_dir, 'fold_' + str(fold_num))
+                with open(os.path.join(work_dir, "None.log.json"), 'r') as json_file:
+                    fold_scores[fold_num] = max([json.loads(line)['mAP']
+                                                 for line in json_file
+                                                 if 'mode' in json.loads(line) and
+                                                 json.loads(line)['mode'] == 'val'])
+            best_fold = np.argmax(fold_scores)
+            checkpoint = os.path.join(base_dir, 'fold_' + str(best_fold), 'latest.pth')
+            log_file = os.path.join(base_dir, 'fold_' + str(best_fold), 'None.log.json')
+            tf_logs = os.path.join(base_dir, 'fold_' + str(best_fold), 'tf_logs')
+
+            score = round(np.mean(fold_scores),3)
+
+            if mode == Mode.RCNN:
+                name = f"Faster-RCNN {params['backbone']} {params['loss_bbox']}"
+                file_name = f"faster_rcnn_{params['backbone']}_{params['loss_bbox']}"
+                dst_checkpoint = os.path.join('checkpoints', "faster_rcnn",
+                                              f"{file_name}_wheat.pth")
+                dst_log = os.path.join('logs', "faster_rcnn", file_name)
+            else:
+                name = f"YOLOX {params['backbone']}"
+                file_name = params['backbone']
+                dst_checkpoint = os.path.join('checkpoints', "yolox",
+                                              f"{file_name}_wheat.pth")
+                dst_log = os.path.join('logs', "yolox", file_name)
+            shutil.copy(checkpoint, dst_checkpoint)
+
+            os.makedirs(dst_log, exist_ok = True)
+            shutil.copy(log_file, dst_log)
+            shutil.copytree(tf_logs, os.path.join(dst_log,'tf_logs'), dirs_exist_ok=True)
+
+            scores_table[name] = [score]
+            lines.append([name, score, dst_checkpoint, "configs/" + backbones_by_name[params['backbone']], dst_log])
+
+
+    header = ['name', 'score', 'checkpoint', 'config', 'log']
+    with open(file, 'w', newline='', encoding='UTF8') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(header)
+        for line in lines:
+            writer.writerow(line)
+
+    draw_table(scores_table)

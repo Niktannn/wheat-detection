@@ -2,6 +2,7 @@ import mmcv
 import os
 import argparse
 import time
+import logging
 
 from mmdet.apis import init_detector
 from mmdet.models import build_detector
@@ -38,7 +39,10 @@ def evaluate(config, ckpt, on_train=False,
     config.model.train_cfg = None
     model = build_detector(config.model, test_cfg=config.get('test_cfg'))
 
-    checkpoint = load_checkpoint(model, ckpt, map_location='cpu')
+    # suppress any output except error messages
+    logger = logging.getLogger("mechanize")
+    logger.setLevel(logging.ERROR)
+    checkpoint = load_checkpoint(model, ckpt, logger=logger, map_location='cpu')
 
     if 'CLASSES' in checkpoint.get('meta', {}):
         model.CLASSES = checkpoint['meta']['CLASSES']
@@ -79,7 +83,8 @@ if __name__ == '__main__':
                         help='path to mmdetection model config')
     parser.add_argument('--ckpt', type=str, default=None,
                         help='path to load weights from')
-    parser.add_argument('--on_train', action='store_true', help='show results')
+    parser.add_argument('--on_train', action='store_true',
+                        help='whether to evaluate on train set(val is used by default)')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--show-dir',
                         help='directory where painted images will be saved')

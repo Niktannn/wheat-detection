@@ -1,0 +1,7 @@
+name	score	checkpoint	config	log
+Faster-RCNN ResNet50 L1	0.915	checkpoints\faster_rcnn\faster_rcnn_ResNet50_L1_wheat.pth	configs/faster_rcnn/faster_rcnn_r50_fpn_mstrain_3x_wheat.py	logs\faster_rcnn\faster_rcnn_ResNet50_L1
+Faster-RCNN ResNet50 IoULoss	0.915	checkpoints\faster_rcnn\faster_rcnn_ResNet50_IoULoss_wheat.pth	configs/faster_rcnn/faster_rcnn_r50_fpn_mstrain_3x_wheat.py	logs\faster_rcnn\faster_rcnn_ResNet50_IoULoss
+Faster-RCNN ResNet101 L1	0.917	checkpoints\faster_rcnn\faster_rcnn_ResNet101_L1_wheat.pth	configs/faster_rcnn/faster_rcnn_r101_fpn_mstrain_3x_wheat.py	logs\faster_rcnn\faster_rcnn_ResNet101_L1
+Faster-RCNN ResNet101 IoULoss	0.916	checkpoints\faster_rcnn\faster_rcnn_ResNet101_IoULoss_wheat.pth	configs/faster_rcnn/faster_rcnn_r101_fpn_mstrain_3x_wheat.py	logs\faster_rcnn\faster_rcnn_ResNet101_IoULoss
+YOLOX yolox-tiny	0.915	checkpoints\yolox\yolox-tiny_wheat.pth	configs/yolox/yolox_tiny_8x8_300e_wheat.py	logs\yolox\yolox-tiny
+YOLOX yolox-small	0.937	checkpoints\yolox\yolox-small_wheat.pth	configs/yolox/yolox_s_8x8_300e_wheat.py	logs\yolox\yolox-small

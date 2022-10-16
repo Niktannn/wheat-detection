@@ -42,14 +42,6 @@ optimizer = dict(lr = 0.01 / 4)
 lr_config = dict(warmup_iters = 5 * 2)
 auto_scale_lr = dict(enable=False)
 
-# max_epochs = 200
-# max_epochs = max_epochs
-# runner.max_epochs = max_epochs
-
-# num_last_epochs = 5
-# lr_config.num_last_epochs = num_last_epochs
-# num_last_epochs = num_last_epochs
-
 interval = 5
 
 evaluation = dict(

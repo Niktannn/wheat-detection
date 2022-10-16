@@ -8,5 +8,8 @@ data/*
 data/*/
 !data/.placeholder
 experiments/
+logs/*
+logs/*/
+!logs/.placeholder
 model_search/
-test.py
+tmp_res/

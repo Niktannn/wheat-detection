@@ -7,6 +7,7 @@ import numpy as np
 @DATASETS.register_module()
 class WheatDataset(CustomDataset):
     CLASSES = ('Head',)
+    PALETTE = (225,100,196)
     def load_annotations(self, ann_file):
         print(f'loading annotations for WheatDataset from {ann_file}...')
         cat2label = {k: i for i, k in enumerate(self.CLASSES)}

@@ -6,7 +6,10 @@ import argparse
 from sklearn.model_selection import train_test_split
 
 seed = 0
-
+def write_ann_file(file, ids):
+    with open(file, 'w') as f:
+        for id in ids:
+            f.write(f"{id}\n")
 
 def main(proportion, train_size):
     if train_size and train_size <= 0:
@@ -42,15 +45,9 @@ def main(proportion, train_size):
     train_ids, val_ids = train_test_split(img_ids, train_size=proportion, stratify=regions, random_state=seed)
     test_ids = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir('data/test')]
 
-    with open('data/train.txt', 'w') as f:
-        for id in train_ids:
-            f.write(f"{id}\n")
-    with open('data/val.txt', 'w') as f:
-        for id in val_ids:
-            f.write(f"{id}\n")
-    with open('data/test.txt', 'w') as f:
-        for id in test_ids:
-            f.write(f"{id}\n")
+    write_ann_file('data/train.txt', train_ids)
+    write_ann_file('data/val.txt', val_ids)
+    write_ann_file('data/test.txt', test_ids)
 
 
 if __name__ == '__main__':

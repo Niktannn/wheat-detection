@@ -141,11 +141,11 @@ custom_hooks = [
         num_last_epochs=num_last_epochs,
         interval=interval,
         priority=48),
-    dict(
-        type='ExpMomentumEMAHook',
-        resume_from=resume_from,
-        momentum=0.0001,
-        priority=49)
+    # dict(
+    #     type='ExpMomentumEMAHook',
+    #     resume_from=resume_from,
+    #     momentum=0.0001,
+    #     priority=49)
 ]
 checkpoint_config = dict(interval=interval)
 evaluation = dict(
