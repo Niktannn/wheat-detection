@@ -4,6 +4,7 @@ dataset_type = 'WheatDataset'
 data_root = 'data/'
 
 data = dict(
+    samples_per_gpu=16,
     test=dict(
         type=dataset_type,
         ann_file = data_root + 'test.txt',
@@ -37,30 +38,33 @@ load_from = 'checkpoints/yolox/yolox_s_8x8_300e_coco.pth'
 
 work_dir = './experiments/yolox/yolox_s'
 
-optimizer = dict(lr = 0.01 / 8)
-lr_config = dict(warmup_iters = 5 * 8)
-log_config = dict(interval = 50)
+optimizer = dict(lr = 0.01 / 4)
+lr_config = dict(warmup_iters = 5 * 2)
 auto_scale_lr = dict(enable=False)
 
 # max_epochs = 200
 # max_epochs = max_epochs
 # runner.max_epochs = max_epochs
 
-# num_last_epochs = 10
+# num_last_epochs = 5
 # lr_config.num_last_epochs = num_last_epochs
 # num_last_epochs = num_last_epochs
 
+interval = 5
+
 evaluation = dict(
+    interval=interval,
     metric = 'mAP',
     save_best= 'mAP'
 )
 
-interval = 10
-checkpoint_config = dict(interval = 10)
+checkpoint_config = dict(interval=interval)
 
 device = 'cuda'
 gpu_ids = range(1)
 
-log_config = dict(hooks = [
-    dict(type='TextLoggerHook'),
-    dict(type='TensorboardLoggerHook')])
+log_config = dict(
+    interval=40,
+    hooks = [
+        dict(type='TextLoggerHook'),
+        dict(type='TensorboardLoggerHook')])

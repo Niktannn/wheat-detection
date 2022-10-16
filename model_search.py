@@ -13,11 +13,16 @@ from mmdet.datasets import build_dataset
 
 seed = 0
 
+#######################################################################
+####################### MODEL SEARCH PARAMETERS #######################
+#######################################################################
 
 backbones_by_name = {
-    'ResNet50'      : 'faster_rcnn_r50_fpn_mstrain_3x_wheat.py',
-    'ResNet101'     : 'faster_rcnn_r101_fpn_mstrain_3x_wheat.py',
-    'ResNext101'    : 'faster_rcnn_x101_64x4d_fpn_mstrain_3x_wheat.py'
+    'ResNet50'      : 'faster_rcnn/faster_rcnn_r50_fpn_mstrain_3x_wheat.py',
+    'ResNet101'     : 'faster_rcnn/faster_rcnn_r101_fpn_mstrain_3x_wheat.py',
+    'ResNext101'    : 'faster_rcnn/faster_rcnn_x101_64x4d_fpn_mstrain_3x_wheat.py',
+    'yolox-tiny'    : 'yolox/yolox_tiny_8x8_300e_wheat.py',
+    'yolox-small'   : 'yolox/yolox_s_8x8_300e_wheat.py'
 }
 
 
@@ -58,6 +63,9 @@ warmup_by_name = {
     }
 }
 
+############################################################
+##################### Faster-RCNN GRID #####################
+############################################################
 
 frcnn_grid = [
 {
@@ -69,16 +77,14 @@ frcnn_grid = [
     'scheduler'     : ['step'],
     'warmup'        : ['linear'],
     'warmup_speed'  : ['fast']
-},
-{   'backbone'      : ['ResNet50', 'ResNet101'],
-    'loss_bbox'     : ['L1', 'IoULoss'],
-    'optimizer'     : ['Adam'],
-    'lr'            : [0.005],
-    'scheduler'     : ['cosine'],
-    'warmup'        : ['linear'],
-    'warmup_speed'  : ['fast']
 }
 ]
+
+############################################################
+######################## YOLOX GRID ########################
+############################################################
+
+yolo_grid = [{ 'backbone'   : ['yolox-tiny', 'yolox-small'] }]
 
 
 
@@ -107,10 +113,37 @@ def draw_table(data, title=['mAP'], width=[100, 6]):
             "-" * width[0], *["-" * width[i + 1] for i, _ in enumerate(title)]))
 
 
+def write_annotations_kfold(skf, base_dir, img_ids, regions, cfg):
+    fold_datasets = []
+    fold_num = 0
+    for train_index, val_index in skf.split(img_ids, regions):
+        train_ids, val_ids = img_ids[train_index], img_ids[val_index]
+
+        train_ann_file = os.path.join(base_dir, f'train_{str(fold_num)}.txt')
+        val_ann_file = os.path.join(base_dir, f'val_{str(fold_num)}.txt')
+
+        write_ann_file(train_ann_file, train_ids)
+        write_ann_file(val_ann_file, val_ids)
+
+        cfg.data.train.dataset.ann_file = train_ann_file
+
+        fold_datasets.append(build_dataset(cfg.data.train))
+        fold_num+=1
+    return fold_datasets
+
+
 def faster_rcnn_model_search(seed=0, max_epochs=3, train_size=None):
+    model_search(seed, max_epochs, train_size, mode='rcnn')
+
+
+def yolo_model_search(seed=0, max_epochs=50, train_size=None):
+    model_search(seed, max_epochs, train_size, mode='yolo')
+
+
+def model_search(seed=0, max_epochs=3, train_size=None, mode='rcnn'):
     train_data = pd.read_csv('data/annotations.csv')
 
-    train_data['source']= pd.factorize(train_data['source'])[0]
+    train_data['source'] = pd.factorize(train_data['source'])[0]
     train_data['source'] = train_data['source'] + 1
 
     imgs_regions = train_data.groupby('image_id')['source'].first()
@@ -130,56 +163,50 @@ def faster_rcnn_model_search(seed=0, max_epochs=3, train_size=None):
         img_ids = img_ids[:partial_size]
         regions = regions[:partial_size]
 
-
-    param_grid = ParameterGrid(frcnn_grid)
+    param_grid = ParameterGrid({})
+    if mode == 'rcnn':
+        param_grid = ParameterGrid(frcnn_grid)
+    elif mode == 'yolo':
+        param_grid = ParameterGrid(yolo_grid)
     scores = {}
     best_score = 0.
 
     n_splits = 3
     skf = StratifiedKFold(n_splits=n_splits, random_state=seed, shuffle=True)
 
-    fold_datasets = []
-    base_dir = os.path.join('model_search', 'faster_rcnn')
+    base_dir = os.path.join('model_search', 'faster_rcnn' if mode == 'rcnn' else 'yolox')
     mmcv.mkdir_or_exist(base_dir)
-    cfg = mmcv.Config.fromfile('configs/faster_rcnn/' + backbones_by_name['ResNet50'])
-
-    fold_num = 0
 
     test_ids = [os.path.splitext(os.path.basename(f))[0] for f in os.listdir('data/test')]
     test_ann_file = os.path.join(base_dir, f'test.txt')
     write_ann_file(test_ann_file, test_ids)
 
-    for train_index, val_index in skf.split(img_ids, regions):
-        train_ids, val_ids = img_ids[train_index], img_ids[val_index]
-
-        train_ann_file = os.path.join(base_dir, f'train_{str(fold_num)}.txt')
-        val_ann_file = os.path.join(base_dir, f'val_{str(fold_num)}.txt')
-
-        write_ann_file(train_ann_file, train_ids)
-        write_ann_file(val_ann_file, val_ids)
-
-        cfg.data.train.dataset.ann_file = train_ann_file
-
-        fold_datasets.append(build_dataset(cfg.data.train))
-        fold_num+=1
+    if mode == 'rcnn':
+        fold_datasets = write_annotations_kfold(skf, base_dir, img_ids, regions,
+                                                mmcv.Config.fromfile('configs/' + backbones_by_name['ResNet50']))
 
     for params in tqdm(param_grid):
         print(f'evaluating parameters:\n{params}')
-
         sum_map = 0.
 
-        for fold_num in range(n_splits):
-            cfg = mmcv.Config.fromfile('configs/faster_rcnn/' + backbones_by_name[params['backbone']])
-            cfg.merge_from_dict({**bbox_losses_by_name[params['loss_bbox']],
-                                 **optimizers_by_name[params['optimizer']],
-                                 **schedulers_by_name[params['scheduler']]
-                                 })
-            cfg.optimizer.lr = params['lr']
-            if params['optimizer'] == 'SGD':
-                cfg.optimizer.momentum = params['momentum']
+        if mode == 'yolo':
+            fold_datasets = write_annotations_kfold(skf, base_dir, img_ids, regions,  mmcv.Config.fromfile(
+                'configs/' + backbones_by_name[params['backbone']]))
 
-            cfg.lr_config.warmup = params['warmup']
-            cfg.merge_from_dict(warmup_by_name[params['warmup_speed']])
+        for fold_num in range(n_splits):
+            cfg = mmcv.Config.fromfile('configs/' + backbones_by_name[params['backbone']])
+
+            if mode == 'rcnn':
+                cfg.merge_from_dict({**bbox_losses_by_name[params['loss_bbox']],
+                                     **optimizers_by_name[params['optimizer']],
+                                     **schedulers_by_name[params['scheduler']]
+                                     })
+                cfg.optimizer.lr = params['lr']
+                if params['optimizer'] == 'SGD':
+                    cfg.optimizer.momentum = params['momentum']
+
+                cfg.lr_config.warmup = params['warmup']
+                cfg.merge_from_dict(warmup_by_name[params['warmup_speed']])
 
             work_dir = os.path.join(base_dir,
                                     '_'.join([str(p) for p in params.values()]),
@@ -201,7 +228,8 @@ def faster_rcnn_model_search(seed=0, max_epochs=3, train_size=None):
             train(cfg, seed=seed, max_epochs=max_epochs, dataset=fold_datasets[fold_num])
 
             with open(os.path.join(work_dir, "None.log.json"), 'r') as json_file:
-                map = max([json.loads(line)['mAP'] for line in json_file if json.loads(line)['mode']=='val'])
+                map = max([json.loads(line)['mAP'] for line in json_file
+                           if 'mode' in json.loads(line) and json.loads(line)['mode']=='val'])
 
             sum_map += map
 
