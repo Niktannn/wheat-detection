@@ -104,9 +104,9 @@ Results are shown in the table (mAP is average mAP for 3 folds):
 | YOLOX yolox-small               |  0.937|
 
 ### Models training process visualization
-You can find best model training process visualization (loss, AP, etc plots) in [demo.ipynb](./demo.ipynb).
+Training process visualization (loss, AP, etc plots) was performed via tensorboard in [demo.ipynb](./demo.ipynb).
 
-To run training visualization of other models run:
+For custom training visualization run:
 ```sh
 tensorboard --logdir <path to log directory>
 ```
